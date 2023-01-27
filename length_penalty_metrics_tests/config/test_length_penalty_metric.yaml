@@ -1,0 +1,13 @@
+#PLANNING CONFIGURATIONS:
+group_name: "cartesian_arm"
+utopia_tolerance: 0.05
+extend: false
+max_distance: 0.3
+
+# HUMAN-AWARE COST FUNCTION CONFIGURATION
+base_frame: "world"
+tool_frame: "end_effector"
+max_step_size: 0.05
+object_type: "red_box"
+n_object: 4
+n_threads: 10

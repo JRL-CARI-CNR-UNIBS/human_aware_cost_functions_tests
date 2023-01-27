@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: human_aware_cost_functions_cells
+    relative_path: urdf/cell_3d_simple.xacro
+    xacro_args: ""
+  SRDF:
+    relative_path: config/cell_3d_simple.srdf
+  CONFIG:
+    author_name: Cesare Tonola
+    author_email: c.tonola001@unibs.it
+    generated_timestamp: 1674823469

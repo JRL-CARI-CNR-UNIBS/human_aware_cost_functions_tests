@@ -1,0 +1,8 @@
+<launch>
+  <!-- Define the MoveIt controller manager plugin to use for trajectory execution -->
+  <param name="moveit_controller_manager" value="moveit_simple_controller_manager/MoveItSimpleControllerManager" />
+
+  <!-- Load controller list to the parameter server -->
+  <rosparam file="$(find human_aware_cost_functions_tests_3d_simple)/config/simple_moveit_controllers.yaml" />
+  <rosparam file="$(find human_aware_cost_functions_tests_3d_simple)/config/ros_controllers.yaml" />
+</launch>
