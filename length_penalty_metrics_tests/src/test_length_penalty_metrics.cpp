@@ -35,11 +35,20 @@ int main(int argc, char **argv)
   double max_step_size;
   nh.getParam("max_step_size",max_step_size);
 
+  double solver_time;
+  nh.getParam("solver_time",solver_time);
+
   int n_object;
   nh.getParam("n_object",n_object);
 
   int n_threads;
   nh.getParam("n_threads",n_threads);
+
+  std::vector<double> start_configuration;
+  nh.getParam("start_configuration",start_configuration);
+
+  std::vector<double> stop_configuration;
+  nh.getParam("stop_configuration",stop_configuration);
 
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
@@ -48,7 +57,9 @@ int main(int argc, char **argv)
 
   Eigen::Vector3d grav; grav << 0, 0, -9.806;
   rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
-  ssm15066_estimator::ParallelSSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
+  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -63,9 +74,15 @@ int main(int argc, char **argv)
     object_loader_msgs::Object obj;
     obj.object_type=object_type;
     obj.pose.header.frame_id=base_frame;
-    obj.pose.pose.position.x = (rand()%(8 + 1))/10;
-    obj.pose.pose.position.y = (rand()%(8 + 1))/10;
-    obj.pose.pose.position.z = (rand()%(8 + 1))/10;
+    obj.pose.pose.position.x = double (((float)rand()/(float)RAND_MAX)*(stop_configuration[0]-start_configuration[0])+start_configuration[0]);
+    obj.pose.pose.position.y = double (((float)rand()/(float)RAND_MAX)*(stop_configuration[1]-start_configuration[1])+start_configuration[1]);
+    obj.pose.pose.position.z = double (((float)rand()/(float)RAND_MAX)*(stop_configuration[2]-start_configuration[2])+start_configuration[2]);
+    ROS_INFO_STREAM("obj x "<<obj.pose.pose.position.x <<" obj y "<<obj.pose.pose.position.y<<" obj z "<<obj.pose.pose.position.z);
+
+    obj.pose.pose.orientation.w = 1.0;
+    obj.pose.pose.orientation.x = 0.0;
+    obj.pose.pose.orientation.y = 0.0;
+    obj.pose.pose.orientation.z = 0.0;
 
     add_srv.request.objects.push_back(obj);
 
@@ -75,6 +92,7 @@ int main(int argc, char **argv)
     obstacle_position[2] = obj.pose.pose.position.z;
 
     ssm->addObstaclePosition(obstacle_position);
+    parallel_ssm->addObstaclePosition(obstacle_position);
   }
   if(not add_obj.call(add_srv))
   {
@@ -108,6 +126,7 @@ int main(int argc, char **argv)
 
   pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
   pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm);
+  pathplan::MetricsPtr metrics_parallel_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(parallel_ssm);
 
   pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::ParallelMoveitCollisionChecker>(planning_scene, group_name, n_threads);
 
@@ -129,32 +148,46 @@ int main(int argc, char **argv)
   pathplan::SamplerPtr sampler = std::make_shared<pathplan::InformedSampler>(lb, ub, lb, ub);
   pathplan::Display display(planning_scene,group_name);
   display.clearMarkers();
+  ros::Duration(1.0).sleep();
+  display.clearMarkers();
 
   /* EUCLIDEAN PATH */
 
   pathplan::TreeSolverPtr solver = std::make_shared<pathplan::RRTStar>(metrics,checker,sampler);
 
-  Eigen::Vector3d start_conf;
-  Eigen::Vector3d goal_conf;
-  start_conf = {0.0,0.0,0.0};
-  goal_conf = {0.8,0.8,0.8};
+  Eigen::VectorXd start_conf = Eigen::Map<Eigen::VectorXd>(start_configuration.data(), start_configuration.size());
+  Eigen::VectorXd goal_conf  = Eigen::Map<Eigen::VectorXd>(stop_configuration .data(), stop_configuration .size());
 
   pathplan::NodePtr start_node = std::make_shared<pathplan::Node>(start_conf);
   pathplan::NodePtr goal_node  = std::make_shared<pathplan::Node>(goal_conf);
 
   pathplan::PathPtr solution;
-  bool success = solver->computePath(start_node, goal_node, nh, solution);
+  bool success = solver->computePath(start_node,goal_node,nh,solution,solver_time);
 
   if(success)
   {
-    ROS_INFO_STREAM("Euclidean metric -> Path found!\n"<<*solution);
+    ROS_BOLDWHITE_STREAM("Euclidean metric -> Path found! Cost: "<<solution->cost());
 
-    display.changeConnectionSize();
-    display.changeNodeSize();
-    display.displayPathAndWaypoints(solution,"pathplan",{0,0,1,1});
+//    display.changeConnectionSize();
+//    display.changeNodeSize();
+//    display.displayPathAndWaypoints(solution,"pathplan",{0,0,1,1});
+
+    int idx = 1;
+    double human_aware_path_cost = 0;
+    double parallel_human_aware_cost, human_aware_cost;
+    for(pathplan::ConnectionPtr& c:solution->getConnections())
+    {
+      human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
+      parallel_human_aware_cost = metrics_parallel_ha->cost(c->getParent(),c->getChild());
+      human_aware_path_cost += parallel_human_aware_cost;
+      ROS_BOLDWHITE_STREAM("conn "<<idx<<" length "<<c->norm()<<" parallel human-aware cost "<<parallel_human_aware_cost<<" human-aware cost "<<human_aware_cost);
+
+      idx++;
+    }
+    ROS_BOLDWHITE_STREAM("Human-aware path cost -> "<<human_aware_path_cost);
   }
   else
-    ROS_INFO("Euclidean metric -> No path found!");
+    ROS_BOLDCYAN_STREAM("Euclidean metric -> No path found!");
 
   /* HUMAN-AWARE PATH */
 
@@ -162,21 +195,33 @@ int main(int argc, char **argv)
   start_node->disconnect();
   goal_node->disconnect();
 
-  solver->setMetrics(metrics_ha);
+  solver->setMetrics(metrics_parallel_ha);
 
-  success = solver->computePath(start_node,goal_node,nh,solution);
+  solver = std::make_shared<pathplan::RRTStar>(metrics_parallel_ha,checker,sampler);
+  success = solver->computePath(start_node,goal_node,nh,solution,solver_time);
 
   if(success)
   {
-    ROS_INFO_STREAM("Human-aware metric -> Path found!\n"<<*solution);
-    display.displayTree(solution->getTree());
+    ROS_BOLDCYAN_STREAM("Human-aware metric -> Path found! Cost: "<<solution->cost());
+    display.displayTree(solution->getTree(),"pathplan",{1,0,0,0.1});
 
     display.changeConnectionSize();
     display.changeNodeSize();
     display.displayPathAndWaypoints(solution,"pathplan",{1,0,0,1});
+
+    int idx = 1;
+    double human_aware_cost;
+    for(pathplan::ConnectionPtr c: solution->getConnections())
+    {
+      human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
+      ROS_BOLDCYAN_STREAM("conn "<<idx<<" length "<<c->norm()<<" parallel human-aware cost "<<c->getCost()<<" human-aware cost "<<human_aware_cost);
+      idx++;
+    }
+
+    ROS_BOLDCYAN_STREAM("Euclidean metric "<<solution->computeEuclideanNorm());
   }
   else
-    ROS_INFO("Human-aware -> No path found!");
+    ROS_BOLDCYAN_STREAM("Human-aware -> No path found!");
 
   return 0;
 }
