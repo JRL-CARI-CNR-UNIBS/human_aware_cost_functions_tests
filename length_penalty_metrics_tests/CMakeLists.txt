@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.0.2)
 project(length_penalty_metrics_tests)
 
 add_compile_options(-std=c++14 -funroll-loops -Wall -Ofast)
-#set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
+#set(CMAKE_BUILD_TYPE Debug)
 
 find_package(catkin REQUIRED COMPONENTS
   length_penalty_metrics object_loader_msgs roscpp
@@ -24,5 +24,11 @@ include_directories(
 add_executable( test_length_penalty_metrics src/test_length_penalty_metrics.cpp)
 add_dependencies( test_length_penalty_metrics ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries( test_length_penalty_metrics
+${catkin_LIBRARIES}
+)
+
+add_executable( test_length_penalty_metrics_speed src/test_length_penalty_metrics_speed.cpp)
+add_dependencies( test_length_penalty_metrics_speed ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries( test_length_penalty_metrics_speed
 ${catkin_LIBRARIES}
 )

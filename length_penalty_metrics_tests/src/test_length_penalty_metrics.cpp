@@ -168,9 +168,9 @@ int main(int argc, char **argv)
   {
     ROS_BOLDWHITE_STREAM("Euclidean metric -> Path found! Cost: "<<solution->cost());
 
-//    display.changeConnectionSize();
-//    display.changeNodeSize();
-//    display.displayPathAndWaypoints(solution,"pathplan",{0,0,1,1});
+    display.changeConnectionSize();
+    display.changeNodeSize();
+    display.displayPathAndWaypoints(solution,"pathplan",{0,0,1,1});
 
     int idx = 1;
     double human_aware_path_cost = 0;
