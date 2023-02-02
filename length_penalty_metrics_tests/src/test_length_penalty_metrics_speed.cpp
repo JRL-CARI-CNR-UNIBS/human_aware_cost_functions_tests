@@ -68,14 +68,16 @@ int main(int argc, char **argv)
     }
   }
 
+  ros::Duration(3).sleep();
+
   Eigen::Vector3d grav; grav << 0, 0, -9.806;
   rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
 
   ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size);
   ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size,n_threads);
 
-  //  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
-  //  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+//  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
+//  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -182,13 +184,34 @@ int main(int argc, char **argv)
     cost_parallel_ha = metrics_parallel_ha->cost(parent,child);
     time_ha_parallel.push_back((ros::WallTime::now()-tic).toSec());
 
-    ROS_INFO_STREAM("Iter "<<i<<" -> length "<<(parent-child).norm());
 
     if(std::abs((cost_ha-cost_parallel_ha))>1e-06)
     {
+      ROS_ERROR_STREAM("Iter "<<i<<" NOT OK -> connection length "<<(parent-child).norm());
+
       ROS_ERROR_STREAM("cost ha "<<cost_ha<<" cost parallel ha "<<cost_parallel_ha);
+      ROS_WARN("Repeating the computation with verbose set 1 -> find the q for which cost is different");
+
+      ssm->setVerbose(1);
+      parallel_ssm->setVerbose(1);
+
+      ROS_ERROR_STREAM("cost ha "<<metrics_ha->cost(parent,child));
+      ros::Duration(1.0).sleep();
+      ROS_ERROR_STREAM("cost // ha "<<metrics_parallel_ha->cost(parent,child));
+
+      ROS_WARN("Now check poses and twists of those q");
+
+      ssm->setVerbose(2);
+      parallel_ssm->setVerbose(2);
+
+      ROS_ERROR_STREAM("cost ha "<<metrics_ha->cost(parent,child));
+      ros::Duration(1.0).sleep();
+      ROS_ERROR_STREAM("cost // ha "<<metrics_parallel_ha->cost(parent,child));
+
       throw std::runtime_error("cost should be equal");
     }
+    else
+      ROS_INFO_STREAM("Iter "<<i<<" OK -> connection length "<<(parent-child).norm());
   }
 
   double average_time_ha          = std::accumulate(time_ha         .begin(),time_ha         .end(),0.0)/time_ha         .size();

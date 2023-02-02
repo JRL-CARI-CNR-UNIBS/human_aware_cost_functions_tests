@@ -8,5 +8,5 @@ base_frame: "world"
 tool_frame: "flange"
 max_step_size: 0.1 #to make parallel version faster than serial version, max step size should be max 1/100 max_distance
 object_type: "red_box"
-n_object: 10
+n_object: 1
 n_threads: 8
