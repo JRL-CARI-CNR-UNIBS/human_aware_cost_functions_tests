@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(length_penalty_metrics_tests)
 
-add_compile_options(-std=c++14 -funroll-loops -Wall -Ofast)
+add_compile_options(-pthread -std=c++17 -funroll-loops -Wall -Ofast)
 set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_BUILD_TYPE Debug)
 

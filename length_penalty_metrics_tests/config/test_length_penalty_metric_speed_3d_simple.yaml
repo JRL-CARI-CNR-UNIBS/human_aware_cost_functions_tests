@@ -1,12 +1,12 @@
 #PLANNING CONFIGURATIONS:
 group_name: "cartesian_arm"
 max_distance: 1
-n_tests: 10000
+n_tests: 100000
 
 # HUMAN-AWARE COST FUNCTION CONFIGURATION
 base_frame: "world"
 tool_frame: "end_effector"
-max_step_size: 0.01
+max_step_size: 0.1  #to make parallel version faster than serial version, max step size should be max 1/10 max_distance
 object_type: "red_box"
 n_object: 10
-n_threads: 4
+n_threads: 8
