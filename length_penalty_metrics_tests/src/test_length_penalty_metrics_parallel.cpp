@@ -47,6 +47,9 @@ int main(int argc, char **argv)
   int n_threads;
   nh.getParam("n_threads",n_threads);
 
+  bool independent_chains;
+  nh.getParam("independent_chains",independent_chains);
+
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
   robot_model::RobotModelPtr kinematic_model = robot_model_loader.getModel();
@@ -68,13 +71,21 @@ int main(int argc, char **argv)
     }
   }
 
-  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size);
-  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size,n_threads);
+  ssm15066_estimator::SSM15066EstimatorPtr ssm;
+  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm;
+  if(independent_chains)
+  {
+    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size);
+    parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size,n_threads);
+  }
+  else
+  {
+    Eigen::Vector3d grav; grav << 0, 0, -9.806;
+    rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
 
-  Eigen::Vector3d grav; grav << 0, 0, -9.806;
-  rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
-  //  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
-  //  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
+    parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+  }
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -140,17 +151,13 @@ int main(int argc, char **argv)
     ROS_ERROR("unable to update planning scene");
     return 0;
   }
-
-  pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
   pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm);
   pathplan::MetricsPtr metrics_parallel_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(parallel_ssm);
 
   pathplan::SamplerPtr sampler = std::make_shared<pathplan::InformedSampler>(lb, ub, lb, ub);
 
-  ros::WallTime tic;
   Eigen::VectorXd parent, child;
   double distance, cost_ha, cost_parallel_ha;
-  std::vector<double> time_euclidean, time_ha, time_ha_parallel;
 
   bool progress_bar_full = false;
   unsigned int progress = 0;
@@ -173,18 +180,8 @@ int main(int argc, char **argv)
     if(distance>max_distance)
       child = parent+(child-parent)*max_distance/distance;
 
-
-    tic = ros::WallTime::now();
-    metrics->cost(parent,child);
-    time_euclidean.push_back((ros::WallTime::now()-tic).toSec());
-
-    tic = ros::WallTime::now();
     cost_ha = metrics_ha->cost(parent,child);
-    time_ha.push_back((ros::WallTime::now()-tic).toSec());
-
-    tic = ros::WallTime::now();
     cost_parallel_ha = metrics_parallel_ha->cost(parent,child);
-    time_ha_parallel.push_back((ros::WallTime::now()-tic).toSec());
 
     progress = std::ceil(((double)(i+1.0))/((double)n_tests)*100.0);
     if(progress%5 == 0 && not progress_bar_full)
@@ -205,19 +202,33 @@ int main(int argc, char **argv)
 
       std::cout<<output;
     }
+
+    if(std::abs((cost_ha-cost_parallel_ha))>1e-06)
+    {
+      std::cout<<"\n";
+      ROS_ERROR_STREAM("Iter "<<i<<" NOT OK -> connection length "<<(parent-child).norm());
+
+      ROS_ERROR_STREAM("cost ha "<<cost_ha<<" cost parallel ha "<<cost_parallel_ha);
+      ROS_WARN("Repeating the computation with verbose set 1 -> find the q for which cost is different");
+
+      ssm->setVerbose(1);
+      parallel_ssm->setVerbose(1);
+
+      ROS_ERROR_STREAM("cost ha "<<metrics_ha->cost(parent,child));
+      ros::Duration(1.0).sleep();
+      ROS_ERROR_STREAM("cost // ha "<<metrics_parallel_ha->cost(parent,child));
+
+      ROS_WARN("Now check poses and twists of those q");
+
+      ssm->setVerbose(2);
+      parallel_ssm->setVerbose(2);
+
+      ROS_ERROR_STREAM("cost ha "<<metrics_ha->cost(parent,child));
+      ros::Duration(1.0).sleep();
+      ROS_ERROR_STREAM("cost // ha "<<metrics_parallel_ha->cost(parent,child));
+
+      throw std::runtime_error("cost should be equal");
+    }
   }
-
-  double average_time_ha          = std::accumulate(time_ha         .begin(),time_ha         .end(),0.0)/time_ha         .size();
-  double average_time_euclidean   = std::accumulate(time_euclidean  .begin(),time_euclidean  .end(),0.0)/time_euclidean  .size();
-  double average_time_ha_parallel = std::accumulate(time_ha_parallel.begin(),time_ha_parallel.end(),0.0)/time_ha_parallel.size();
-
-  ROS_BOLDWHITE_STREAM("Average time to compute Euclidean metric: "  <<average_time_euclidean  <<" s");
-  ROS_BOLDCYAN_STREAM ("Average time to compute HA metric: "         <<average_time_ha         <<" s");
-  ROS_BOLDGREEN_STREAM("Average time to compute HA-parallel metric: "<<average_time_ha_parallel<<" s");
-
-  ROS_BOLDRED_STREAM("HA is "         <<(average_time_ha/average_time_euclidean)          <<" time slower than Euclidean metrics");
-  ROS_BOLDRED_STREAM("HA-parallel is "<<(average_time_ha_parallel/average_time_euclidean)<<" time slower than Euclidean metrics" );
-  ROS_BOLDRED_STREAM("HA-parallel is "<<(average_time_ha_parallel/average_time_ha)       <<" time slower than HA metrics"        );
-
   return 0;
 }

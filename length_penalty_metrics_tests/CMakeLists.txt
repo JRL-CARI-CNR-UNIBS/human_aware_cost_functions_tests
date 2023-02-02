@@ -32,3 +32,9 @@ add_dependencies( test_length_penalty_metrics_speed ${${PROJECT_NAME}_EXPORTED_T
 target_link_libraries( test_length_penalty_metrics_speed
 ${catkin_LIBRARIES}
 )
+
+add_executable( test_length_penalty_metrics_parallel src/test_length_penalty_metrics_parallel.cpp)
+add_dependencies( test_length_penalty_metrics_parallel ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries( test_length_penalty_metrics_parallel
+${catkin_LIBRARIES}
+)
