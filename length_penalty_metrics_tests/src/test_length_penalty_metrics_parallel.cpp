@@ -47,9 +47,6 @@ int main(int argc, char **argv)
   int n_threads;
   nh.getParam("n_threads",n_threads);
 
-  bool independent_chains;
-  nh.getParam("independent_chains",independent_chains);
-
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
   robot_model::RobotModelPtr kinematic_model = robot_model_loader.getModel();
@@ -71,21 +68,11 @@ int main(int argc, char **argv)
     }
   }
 
-  ssm15066_estimator::SSM15066EstimatorPtr ssm;
-  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm;
-  if(independent_chains)
-  {
-    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size);
-    parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(robot_model_loader.getURDF(),base_frame,tool_frame,max_step_size,n_threads);
-  }
-  else
-  {
-    Eigen::Vector3d grav; grav << 0, 0, -9.806;
-    rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
+  Eigen::Vector3d grav; grav << 0, 0, -9.806;
+  rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
 
-    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
-    parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
-  }
+  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
+  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -184,6 +171,7 @@ int main(int argc, char **argv)
     cost_parallel_ha = metrics_parallel_ha->cost(parent,child);
 
     progress = std::ceil(((double)(i+1.0))/((double)n_tests)*100.0);
+
     if(progress%5 == 0 && not progress_bar_full)
     {
       std::string output = "\r[";
@@ -197,7 +185,7 @@ int main(int argc, char **argv)
       if(progress == 100)
       {
         progress_bar_full = true;
-        output = output+"\n";
+        output = output+"\033[1;5;32m Succesfully completed!\033[0m\n";
       }
 
       std::cout<<output;

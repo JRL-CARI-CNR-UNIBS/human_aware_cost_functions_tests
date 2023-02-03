@@ -50,6 +50,10 @@ int main(int argc, char **argv)
   std::vector<double> stop_configuration;
   nh.getParam("stop_configuration",stop_configuration);
 
+  bool parallel_ssm;
+  nh.getParam("parallel_ssm",parallel_ssm);
+
+
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
   robot_model::RobotModelPtr kinematic_model = robot_model_loader.getModel();
@@ -57,9 +61,12 @@ int main(int argc, char **argv)
 
   Eigen::Vector3d grav; grav << 0, 0, -9.806;
   rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
-  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
-  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
 
+  ssm15066_estimator::SSM15066EstimatorPtr ssm;
+  if(parallel_ssm)
+    ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+  else
+    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -92,7 +99,6 @@ int main(int argc, char **argv)
     obstacle_position[2] = obj.pose.pose.position.z;
 
     ssm->addObstaclePosition(obstacle_position);
-    parallel_ssm->addObstaclePosition(obstacle_position);
   }
   if(not add_obj.call(add_srv))
   {
@@ -126,7 +132,6 @@ int main(int argc, char **argv)
 
   pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
   pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm);
-  pathplan::MetricsPtr metrics_parallel_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(parallel_ssm);
 
   pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::ParallelMoveitCollisionChecker>(planning_scene, group_name, n_threads);
 
@@ -173,14 +178,13 @@ int main(int argc, char **argv)
     display.displayPathAndWaypoints(solution,"pathplan",{0,0,1,1});
 
     int idx = 1;
+    double human_aware_cost;
     double human_aware_path_cost = 0;
-    double parallel_human_aware_cost, human_aware_cost;
     for(pathplan::ConnectionPtr& c:solution->getConnections())
     {
       human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
-      parallel_human_aware_cost = metrics_parallel_ha->cost(c->getParent(),c->getChild());
-      human_aware_path_cost += parallel_human_aware_cost;
-      ROS_BOLDWHITE_STREAM("conn "<<idx<<" length "<<c->norm()<<" parallel human-aware cost "<<parallel_human_aware_cost<<" human-aware cost "<<human_aware_cost);
+      human_aware_path_cost += human_aware_cost;
+      ROS_BOLDWHITE_STREAM("conn "<<idx<<" length "<<c->norm()<<" human-aware cost "<<human_aware_cost);
 
       idx++;
     }
@@ -191,13 +195,10 @@ int main(int argc, char **argv)
 
   /* HUMAN-AWARE PATH */
 
-  solver->resetProblem();
   start_node->disconnect();
   goal_node->disconnect();
 
-  solver->setMetrics(metrics_parallel_ha);
-
-  solver = std::make_shared<pathplan::RRTStar>(metrics_parallel_ha,checker,sampler);
+  solver = std::make_shared<pathplan::RRTStar>(metrics_ha,checker,sampler);
   success = solver->computePath(start_node,goal_node,nh,solution,solver_time);
 
   if(success)
@@ -214,7 +215,10 @@ int main(int argc, char **argv)
     for(pathplan::ConnectionPtr c: solution->getConnections())
     {
       human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
-      ROS_BOLDCYAN_STREAM("conn "<<idx<<" length "<<c->norm()<<" parallel human-aware cost "<<c->getCost()<<" human-aware cost "<<human_aware_cost);
+      if(std::abs(c->getCost()-human_aware_cost)>1e-06)
+        throw std::runtime_error("costs are different");
+
+      ROS_BOLDCYAN_STREAM("conn "<<idx<<" length "<<c->norm()<<" human-aware cost "<<human_aware_cost);
       idx++;
     }
 

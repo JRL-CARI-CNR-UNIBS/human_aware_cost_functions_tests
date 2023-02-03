@@ -38,3 +38,9 @@ add_dependencies( test_length_penalty_metrics_parallel ${${PROJECT_NAME}_EXPORTE
 target_link_libraries( test_length_penalty_metrics_parallel
 ${catkin_LIBRARIES}
 )
+
+add_executable( test_rosdyn_clone src/test_rosdyn_clone.cpp)
+add_dependencies( test_rosdyn_clone ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries( test_rosdyn_clone
+${catkin_LIBRARIES}
+)
