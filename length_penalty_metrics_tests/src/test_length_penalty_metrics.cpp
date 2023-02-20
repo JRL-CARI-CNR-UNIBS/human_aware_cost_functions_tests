@@ -8,6 +8,8 @@
 #include <graph_core/solvers/rrt_star.h>
 #include <length_penalty_metrics.h>
 #include <object_loader_msgs/AddObjects.h>
+#include <ssm15066_estimators/parallel_ssm15066_estimator2D.h>
+
 
 int main(int argc, char **argv)
 {
@@ -16,6 +18,8 @@ int main(int argc, char **argv)
 
   ros::AsyncSpinner aspin(4);
   aspin.start();
+
+  srand((unsigned int)time(NULL));
 
   ros::ServiceClient ps_client=nh.serviceClient<moveit_msgs::GetPlanningScene>("/get_planning_scene");
   ros::ServiceClient add_obj=nh.serviceClient<object_loader_msgs::AddObjects>("add_object_to_scene");
@@ -38,6 +42,18 @@ int main(int argc, char **argv)
   double solver_time;
   nh.getParam("solver_time",solver_time);
 
+  double max_cart_acc;
+  nh.getParam("max_cart_acc",max_cart_acc);
+
+  double t_r;
+  nh.getParam("Tr",t_r);
+
+  double min_distance;
+  nh.getParam("min_distance",min_distance);
+
+  double v_h;
+  nh.getParam("v_h",v_h);
+
   int n_object;
   nh.getParam("n_object",n_object);
 
@@ -53,6 +69,8 @@ int main(int argc, char **argv)
   bool parallel_ssm;
   nh.getParam("parallel_ssm",parallel_ssm);
 
+  bool display_tree;
+  nh.getParam("display_tree",display_tree);
 
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
@@ -64,9 +82,15 @@ int main(int argc, char **argv)
 
   ssm15066_estimator::SSM15066EstimatorPtr ssm;
   if(parallel_ssm)
-    ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+    ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator2D>(chain,max_step_size,n_threads);
   else
-    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
+    ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator2D>(chain,max_step_size);
+
+  ssm->setHumanVelocity(0.0);
+  ssm->setMaxCartAcc(max_cart_acc);
+  ssm->setReactionTime(t_r);
+  ssm->setMinDistance(min_distance);
+  ssm->updateMembers();
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -204,11 +228,12 @@ int main(int argc, char **argv)
   if(success)
   {
     ROS_BOLDCYAN_STREAM("Human-aware metric -> Path found! Cost: "<<solution->cost());
-    display.displayTree(solution->getTree(),"pathplan",{1,0,0,0.1});
+    if(display_tree)
+      display.displayTree(solution->getTree(),"pathplan",{0,1,0,0.1});
 
     display.changeConnectionSize();
     display.changeNodeSize();
-    display.displayPathAndWaypoints(solution,"pathplan",{1,0,0,1});
+    display.displayPathAndWaypoints(solution,"pathplan",{0,1,0,1});
 
     int idx = 1;
     double human_aware_cost;
@@ -218,11 +243,28 @@ int main(int argc, char **argv)
       if(std::abs(c->getCost()-human_aware_cost)>1e-06)
         throw std::runtime_error("costs are different");
 
-      ROS_BOLDCYAN_STREAM("conn "<<idx<<" length "<<c->norm()<<" human-aware cost "<<human_aware_cost);
+      ROS_BOLDCYAN_STREAM("conn "<<idx<<" length "<<c->norm()<<" human-aware cost "<<human_aware_cost<<" lambda "<<(human_aware_cost/c->norm()));
       idx++;
     }
 
     ROS_BOLDCYAN_STREAM("Euclidean metric "<<solution->computeEuclideanNorm());
+
+    ROS_BOLDYELLOW_STREAM("Revaluate path cost with human velocity set to param value");
+    ssm->setHumanVelocity(v_h);
+    ssm->updateMembers();
+
+    idx = 1;
+    for(pathplan::ConnectionPtr c: solution->getConnections())
+    {
+      human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
+      c->setCost(human_aware_cost);
+
+      ROS_BOLDYELLOW_STREAM("conn "<<idx<<" length "<<c->norm()<<" VH human-aware cost "<<human_aware_cost<<" lambda "<<(human_aware_cost/c->norm()));
+      idx++;
+    }
+
+    ROS_BOLDYELLOW_STREAM("Path cost considering human velocity -> "<<solution->cost());
+
   }
   else
     ROS_BOLDCYAN_STREAM("Human-aware -> No path found!");

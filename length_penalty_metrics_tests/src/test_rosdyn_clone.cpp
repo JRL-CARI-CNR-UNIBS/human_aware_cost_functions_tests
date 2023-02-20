@@ -12,6 +12,8 @@ int main(int argc, char **argv)
   ros::AsyncSpinner aspin(4);
   aspin.start();
 
+  srand((unsigned int)time(NULL));
+
   std::string base_frame;
   nh.getParam("base_frame",base_frame);
 

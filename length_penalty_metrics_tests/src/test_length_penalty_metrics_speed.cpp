@@ -8,6 +8,7 @@
 #include <graph_core/solvers/rrt_star.h>
 #include <length_penalty_metrics.h>
 #include <object_loader_msgs/AddObjects.h>
+#include <ssm15066_estimators/parallel_ssm15066_estimator2D.h>
 
 int main(int argc, char **argv)
 {
@@ -16,6 +17,8 @@ int main(int argc, char **argv)
 
   ros::AsyncSpinner aspin(4);
   aspin.start();
+
+  srand((unsigned int)time(NULL));
 
   ros::ServiceClient ps_client = nh.serviceClient<moveit_msgs::GetPlanningScene> ("/get_planning_scene");
   ros::ServiceClient add_obj   = nh.serviceClient<object_loader_msgs::AddObjects>("add_object_to_scene");
@@ -70,8 +73,8 @@ int main(int argc, char **argv)
 
   Eigen::Vector3d grav; grav << 0, 0, -9.806;
   rosdyn::ChainPtr chain = rosdyn::createChain(*robot_model_loader.getURDF(),base_frame,tool_frame,grav);
-  ssm15066_estimator::SSM15066EstimatorPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator>(chain,max_step_size);
-  ssm15066_estimator::ParallelSSM15066EstimatorPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator>(chain,max_step_size,n_threads);
+  ssm15066_estimator::SSM15066Estimator2DPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator2D>(chain,max_step_size);
+  ssm15066_estimator::ParallelSSM15066Estimator2DPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator2D>(chain,max_step_size,n_threads);
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
