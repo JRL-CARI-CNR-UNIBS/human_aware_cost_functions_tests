@@ -10,7 +10,6 @@
 #include <object_loader_msgs/AddObjects.h>
 #include <ssm15066_estimators/parallel_ssm15066_estimator2D.h>
 
-
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "test_length_penalty_metrics");
