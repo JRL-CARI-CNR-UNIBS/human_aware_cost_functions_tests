@@ -65,11 +65,17 @@ int main(int argc, char **argv)
   std::vector<double> stop_configuration;
   nh.getParam("stop_configuration",stop_configuration);
 
+  std::vector<std::string> poi_names;
+  nh.getParam("poi_names",poi_names);
+
   bool parallel_ssm;
   nh.getParam("parallel_ssm",parallel_ssm);
 
   bool display_tree;
   nh.getParam("display_tree",display_tree);
+
+  bool use_vh;
+  nh.getParam("use_vh",use_vh);
 
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
@@ -85,10 +91,15 @@ int main(int argc, char **argv)
   else
     ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator2D>(chain,max_step_size);
 
-  ssm->setHumanVelocity(0.0);
-  ssm->setMaxCartAcc(max_cart_acc);
-  ssm->setReactionTime(t_r);
-  ssm->setMinDistance(min_distance);
+  if(use_vh)
+    ssm->setHumanVelocity(v_h,false);
+  else
+    ssm->setHumanVelocity(0.0,false);
+
+  ssm->setMaxCartAcc(max_cart_acc,false);
+  ssm->setReactionTime(t_r,false);
+  ssm->setMinDistance(min_distance,false);
+  ssm->setPoiNames(poi_names);
   ssm->updateMembers();
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
@@ -173,6 +184,7 @@ int main(int argc, char **argv)
       ub(idx) = bounds.max_position_;
     }
   }
+
   pathplan::SamplerPtr sampler = std::make_shared<pathplan::InformedSampler>(lb, ub, lb, ub);
   pathplan::Display display(planning_scene,group_name);
   display.clearMarkers();
@@ -248,22 +260,23 @@ int main(int argc, char **argv)
 
     ROS_BOLDCYAN_STREAM("Euclidean metric "<<solution->computeEuclideanNorm());
 
-    ROS_BOLDYELLOW_STREAM("Revaluate path cost with human velocity set to param value");
-    ssm->setHumanVelocity(v_h);
-    ssm->updateMembers();
-
-    idx = 1;
-    for(pathplan::ConnectionPtr c: solution->getConnections())
+    if(not use_vh)
     {
-      human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
-      c->setCost(human_aware_cost);
+      ROS_BOLDYELLOW_STREAM("Revaluate path cost with human velocity set to param value");
+      ssm->setHumanVelocity(v_h);
 
-      ROS_BOLDYELLOW_STREAM("conn "<<idx<<" length "<<c->norm()<<" VH human-aware cost "<<human_aware_cost<<" lambda "<<(human_aware_cost/c->norm()));
-      idx++;
+      idx = 1;
+      for(pathplan::ConnectionPtr c: solution->getConnections())
+      {
+        human_aware_cost = metrics_ha->cost(c->getParent(),c->getChild());
+        c->setCost(human_aware_cost);
+
+        ROS_BOLDYELLOW_STREAM("conn "<<idx<<" length "<<c->norm()<<" VH human-aware cost "<<human_aware_cost<<" lambda "<<(human_aware_cost/c->norm()));
+        idx++;
+      }
+
+      ROS_BOLDYELLOW_STREAM("Path cost considering human velocity -> "<<solution->cost());
     }
-
-    ROS_BOLDYELLOW_STREAM("Path cost considering human velocity -> "<<solution->cost());
-
   }
   else
     ROS_BOLDCYAN_STREAM("Human-aware -> No path found!");

@@ -35,8 +35,23 @@ int main(int argc, char **argv)
   std::string object_type;
   nh.getParam("object_type",object_type);
 
+  std::vector<std::string> poi_names;
+  nh.getParam("poi_names",poi_names);
+
+  double max_cart_acc;
+  nh.getParam("max_cart_acc",max_cart_acc);
+
+  double tr;
+  nh.getParam("Tr",tr);
+
+  double min_distance;
+  nh.getParam("min_distance",min_distance);
+
+  double v_h;
+  nh.getParam("v_h",v_h);
+
   double max_step_size;
-  nh.getParam("max_step_size",max_step_size);
+  nh.getParam("ssm_max_step_size",max_step_size);
 
   double max_distance;
   nh.getParam("max_distance",max_distance);
@@ -48,7 +63,13 @@ int main(int argc, char **argv)
   nh.getParam("n_object",n_object);
 
   int n_threads;
-  nh.getParam("n_threads",n_threads);
+  nh.getParam("ssm_n_threads",n_threads);
+
+  bool display;
+  nh.getParam("display",display);
+
+  int verbose;
+  nh.getParam("verbose",verbose);
 
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
@@ -76,6 +97,22 @@ int main(int argc, char **argv)
 
   ssm15066_estimator::SSM15066Estimator2DPtr ssm = std::make_shared<ssm15066_estimator::SSM15066Estimator2D>(chain,max_step_size);
   ssm15066_estimator::ParallelSSM15066Estimator2DPtr parallel_ssm = std::make_shared<ssm15066_estimator::ParallelSSM15066Estimator2D>(chain,max_step_size,n_threads);
+
+  ssm->setVerbose(verbose);
+  ssm->setHumanVelocity(v_h,false);
+  ssm->setMaxCartAcc(max_cart_acc,false);
+  ssm->setReactionTime(tr,false);
+  ssm->setMinDistance(min_distance,false);
+  ssm->setPoiNames(poi_names);
+  ssm->updateMembers();
+
+  parallel_ssm->setVerbose(verbose);
+  parallel_ssm->setHumanVelocity(v_h,false);
+  parallel_ssm->setMaxCartAcc(max_cart_acc,false);
+  parallel_ssm->setReactionTime(tr,false);
+  parallel_ssm->setMinDistance(min_distance,false);
+  parallel_ssm->setPoiNames(poi_names);
+  parallel_ssm->updateMembers();
 
   if(not add_obj.waitForExistence(ros::Duration(10)))
   {
@@ -146,6 +183,11 @@ int main(int argc, char **argv)
 
   pathplan::SamplerPtr sampler = std::make_shared<pathplan::InformedSampler>(lb, ub, lb, ub);
 
+  pathplan::Display disp(planning_scene,group_name);
+  pathplan::NodePtr parent_node;
+  pathplan::NodePtr child_node ;
+  pathplan::ConnectionPtr conn ;
+
   Eigen::VectorXd parent, child;
   double distance, cost_ha, cost_parallel_ha;
 
@@ -157,41 +199,48 @@ int main(int argc, char **argv)
   for(unsigned int i=0;i<n_tests;i++)
   {
     parent = sampler->sample();
+    child  = sampler->sample();
 
-    while(true)
-    {
-      child  = sampler->sample();
-      distance = (child-parent).norm();
+    distance = (child-parent).norm();
 
-      if(distance>0.1)
-        break;
-    }
-
-    if(distance>max_distance)
+    if(distance>max_distance || distance<0.1)
       child = parent+(child-parent)*max_distance/distance;
+
+    if(display)
+    {
+      parent_node = std::make_shared<pathplan::Node>(parent);
+      child_node  = std::make_shared<pathplan::Node>(child );
+
+      conn = std::make_shared<pathplan::Connection>(parent_node,child_node);
+      disp.displayConnection(conn,"pathplan",{0.0,0.0,1.0,0.8});
+
+      ros::WallDuration(0.001).sleep();
+    }
 
     cost_ha = metrics_ha->cost(parent,child);
     cost_parallel_ha = metrics_parallel_ha->cost(parent,child);
 
-    progress = std::ceil(((double)(i+1.0))/((double)n_tests)*100.0);
-
-    if(progress%5 == 0 && not progress_bar_full)
+    if(not display)
     {
-      std::string output = "\r[";
-
-      for(unsigned int j=0;j<progress/5.0;j++)
-        output = output+"=";
-
-      output = output+">] ";
-      output = "\033[1;37;42m"+output+std::to_string(progress)+"%\033[0m";  //1->bold, 37->foreground white, 42->background green
-
-      if(progress == 100)
+      progress = std::ceil(((double)(i+1.0))/((double)n_tests)*100.0);
+      if(progress%5 == 0 && not progress_bar_full)
       {
-        progress_bar_full = true;
-        output = output+"\033[1;5;32m Succesfully completed!\033[0m\n";
-      }
+        std::string output = "\r[";
 
-      std::cout<<output;
+        for(unsigned int j=0;j<progress/5.0;j++)
+          output = output+"=";
+
+        output = output+">] ";
+        output = "\033[1;37;42m"+output+std::to_string(progress)+"%\033[0m";  //1->bold, 37->foreground white, 42->background green
+
+        if(progress == 100)
+        {
+          progress_bar_full = true;
+          output = output+"\033[1;5;32m Succesfully completed!\033[0m\n";
+        }
+
+        std::cout<<output;
+      }
     }
 
     if(std::abs((cost_ha-cost_parallel_ha))>1e-06)
@@ -219,6 +268,11 @@ int main(int argc, char **argv)
       ROS_ERROR_STREAM("cost // ha "<<metrics_parallel_ha->cost(parent,child));
 
       throw std::runtime_error("cost should be equal");
+    }
+    else
+    {
+      if(display)
+        ROS_INFO_STREAM("lambda "<<cost_ha/(parent-child).norm()<<" | length "<<(parent-child).norm()<<" | cost "<<cost_ha);
     }
   }
   return 0;

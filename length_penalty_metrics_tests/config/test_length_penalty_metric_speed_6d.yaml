@@ -6,7 +6,13 @@ n_tests: 100000
 # HUMAN-AWARE COST FUNCTION CONFIGURATION
 base_frame: "world"
 tool_frame: "flange"
-max_step_size: 0.1 #to make parallel version faster than serial version, max step size should be max 1/100 max_distance
-object_type: "red_box"
-n_object: 10
-n_threads: 8
+object_type: "sphere"
+n_object: 20
+
+poi_names: ["a_forearm","b_mount_flange","b_forearm","flange"]
+ssm_max_step_size: 0.01  #to make parallel version faster than serial version, max step size should be max 1/10 max_distance
+ssm_n_threads: 8
+max_cart_acc: 2.5
+Tr: 0.15
+min_distance: 0.2
+v_h: 1.6
