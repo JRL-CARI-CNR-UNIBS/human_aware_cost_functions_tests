@@ -12,8 +12,8 @@
   <node name="test_length_penalty_metrics_speed_node"
         pkg="length_penalty_metrics_tests"
         type="test_length_penalty_metrics_speed"
-        output="screen"
-        launch-prefix="gdb -ex run --args" >
+        output="screen">
+        <!-- launch-prefix="gdb -ex run -X-args" > -->
   </node>
 
 </launch>

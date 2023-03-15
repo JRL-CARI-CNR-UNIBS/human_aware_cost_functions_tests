@@ -123,11 +123,16 @@ int main(int argc, char **argv)
   obj.pose.pose.orientation.y = 0.0;
   obj.pose.pose.orientation.z = 0.0;
 
+  std::random_device rseed;
+  std::mt19937 gen(rseed());
+  std::uniform_real_distribution<double> dist(-1.5,1.5);
+  std::uniform_real_distribution<double> dist_z(0.0,1.5);
+
   for(unsigned int i=0;i<n_object;i++)
   {
-    obj.pose.pose.position.x = double (((float)rand()/(float)RAND_MAX)*(ub[0]-lb[0])+lb[0]);
-    obj.pose.pose.position.y = double (((float)rand()/(float)RAND_MAX)*(ub[1]-lb[1])+lb[1]);
-    obj.pose.pose.position.z = double (((float)rand()/(float)RAND_MAX)*(ub[2]-lb[2])+lb[2]);
+    obj.pose.pose.position.x = dist(gen);
+    obj.pose.pose.position.y = dist(gen);
+    obj.pose.pose.position.z = dist_z(gen);
 
     add_srv.request.objects.push_back(obj);
 

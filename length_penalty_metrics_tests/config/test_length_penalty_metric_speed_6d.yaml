@@ -7,7 +7,7 @@ n_tests: 100000
 base_frame: "world"
 tool_frame: "flange"
 object_type: "sphere"
-n_object: 20
+n_object: 40
 
 poi_names: ["a_forearm","b_mount_flange","b_forearm","flange"]
 ssm_max_step_size: 0.01  #to make parallel version faster than serial version, max step size should be max 1/10 max_distance
