@@ -6,13 +6,13 @@ set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_BUILD_TYPE Debug)
 
 find_package(catkin REQUIRED COMPONENTS
-  length_penalty_metrics object_loader_msgs roscpp
+  length_penalty_metrics ssm15066_estimators object_loader_msgs roscpp
 )
 
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES length_penalty_metrics_tests
-  CATKIN_DEPENDS length_penalty_metrics object_loader_msgs roscpp
+  CATKIN_DEPENDS length_penalty_metrics ssm15066_estimators object_loader_msgs roscpp
   DEPENDS
 )
 
