@@ -16,6 +16,7 @@
   <depend>length_penalty_metrics</depend>
   <depend>ssm15066_estimators</depend>
   <depend>object_loader_msgs</depend>
+  <depend>nn_ssm</depend>
 
   <export>
 

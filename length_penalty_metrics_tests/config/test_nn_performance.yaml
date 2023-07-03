@@ -1,0 +1,29 @@
+# PLANNING CONFIGURATIONS:
+group_name: "manipulator"
+utopia_tolerance: 0.05
+extend: false
+max_distance: 1
+init_start_configuration: [1.1160822571268618, -0.36605717084420153, -0.6613339554670044, 0.2598214740910541, -0.8031200900767068, -0.2716137877745939]
+end_start_configuration: [-1.1155641983069562, -0.36099297017660414, -0.679692439733893, -0.26550089158378515, -0.7902169742242835, -0.2874408819936133]
+init_stop_configuration:  [-1.12199514293867, 0.38763777484579987, 0.5963607094801189, -0.27169757220422974, 0.8502837814992195, 0.2539459644858469]
+end_stop_configuration:  [1.1160219817234516, 0.3778465742834835, 0.6200910254031209, 0.28335764210798137, 0.8444095013250474, 0.25389556034796174]
+max_time: 5
+
+# HUMAN-AWARE COST FUNCTION CONFIGURATION
+base_frame: "world"
+tool_frame: "flange"
+object_type: "sphere"
+n_object: 3
+poi_names: ["a_forearm","b_mount_flange","b_forearm","flange"]
+
+max_step_size: 0.005
+max_cart_acc: 2.5
+Tr: 0.15
+min_distance: 0.2
+v_h: 1.6
+
+n_iter: 20
+obj_min_range: [-1.5,-1.5,0]
+obj_max_range: [ 1.5, 1.5,1.5]
+
+namespace: "ssm_nn"
