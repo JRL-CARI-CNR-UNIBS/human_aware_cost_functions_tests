@@ -164,11 +164,6 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
-  pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm);
-
-  pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::ParallelMoveitCollisionChecker>(planning_scene, group_name, n_threads);
-
   std::vector<std::string> joint_names = kinematic_model->getJointModelGroup(group_name)->getActiveJointModelNames();
 
   unsigned int dof = joint_names.size();
@@ -184,6 +179,13 @@ int main(int argc, char **argv)
       ub(idx) = bounds.max_position_;
     }
   }
+
+  Eigen::VectorXd scale; scale.setOnes(lb.rows(),1);
+
+  pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
+  pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm,scale);
+
+  pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::ParallelMoveitCollisionChecker>(planning_scene, group_name, n_threads);
 
   pathplan::SamplerPtr sampler = std::make_shared<pathplan::InformedSampler>(lb, ub, lb, ub);
   pathplan::Display display(planning_scene,group_name);

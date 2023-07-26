@@ -135,8 +135,9 @@ int main(int argc, char **argv)
   Eigen::Vector3d obs_eigen_max_range = Eigen::Map<Eigen::Vector3d>(obs_max_range.data(), obs_max_range.size());
   ssm15066_estimator::SSM15066EstimatorNNPtr ssm_nn = std::make_shared<ssm15066_estimator::SSM15066EstimatorNN>(chain,nn,obs_eigen_min_range,obs_eigen_max_range);
 
-  pathplan::MetricsPtr metrics_ssm = std::make_shared<pathplan::LengthPenaltyMetrics>(ssm);
-  pathplan::MetricsPtr metrics_nn = std::make_shared<pathplan::LengthPenaltyMetrics>(ssm_nn);
+  Eigen::VectorXd scale; scale.setOnes(lb.rows(),1);
+  pathplan::MetricsPtr metrics_ssm = std::make_shared<pathplan::LengthPenaltyMetrics>(ssm,scale);
+  pathplan::MetricsPtr metrics_nn = std::make_shared<pathplan::LengthPenaltyMetrics>(ssm_nn,scale);
   pathplan::MetricsPtr metrics = std::make_shared<pathplan::Metrics>();
 
   pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::ParallelMoveitCollisionChecker>(planning_scene, group_name);

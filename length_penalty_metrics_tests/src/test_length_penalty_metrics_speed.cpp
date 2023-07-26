@@ -175,9 +175,11 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  Eigen::VectorXd scale; scale.setOnes(lb.rows(),1);
+
   pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
-  pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm);
-  pathplan::MetricsPtr metrics_parallel_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(parallel_ssm);
+  pathplan::MetricsPtr metrics_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(ssm,scale);
+  pathplan::MetricsPtr metrics_parallel_ha=std::make_shared<pathplan::LengthPenaltyMetrics>(parallel_ssm,scale);
 
   pathplan::SamplerPtr sampler = std::make_shared<pathplan::InformedSampler>(lb, ub, lb, ub);
 
